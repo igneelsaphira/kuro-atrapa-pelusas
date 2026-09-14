@@ -1,0 +1,21 @@
+{
+  "expo": {
+    "name": "Kuro: Saca Pelusas",
+    "slug": "kuro-saca-pelusas",
+    "version": "0.1.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "dark",
+    "platforms": [
+      "ios",
+      "android",
+      "web"
+    ],
+    "plugins": [
+      "expo-font"
+    ],
+    "web": {
+      "name": "Kuro: Saca Pelusas",
+      "bundler": "metro"
+    }
+  }
+}
