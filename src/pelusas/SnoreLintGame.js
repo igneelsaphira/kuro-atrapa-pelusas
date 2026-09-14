@@ -265,7 +265,7 @@ export default function SnoreLintGame({ onComplete }) {
 const styles = StyleSheet.create({
   viewport: { flex: 1, backgroundColor: '#171223', overflow: 'hidden' },
   kuroFrame: { position: 'absolute', overflow: 'hidden' },
-  pelFrame: { position: 'absolute', overflow: 'hidden' },
+  pelFrame: { position: 'absolute', overflow: 'hidden', opacity: 0.9 },
   zzz: { position: 'absolute', color: '#cfd4ff', fontSize: 22, fontWeight: '800', opacity: 0.8 },
   spark: { position: 'absolute', color: '#ffe9a8', fontSize: 16, fontWeight: '800' },
   topBar: { position: 'absolute', top: 0, left: 0, right: 0, padding: 22, flexDirection: 'row', justifyContent: 'center' },
