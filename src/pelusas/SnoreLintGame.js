@@ -2,8 +2,13 @@ import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { Platform, Pressable, StyleSheet, Text, View, Image, useWindowDimensions } from 'react-native';
 
 const ROOM = require('../../assets/kuro/sillon-sala.png');
-const KURO_STRIP = require('../../assets/kuro/kuro-snore-strip.png');
+const KURO_STRIP = require('../../assets/kuro/kuro-snore-nocushion.png');
 const PELUSA_STRIP = require('../../assets/kuro/pelusa-sprite.png');
+const PLANT_FRONT = require('../../assets/kuro/plant-front.png');
+// Caja de la planta derecha (fracción de imagen): capa de frente + escondite.
+const PLANT_BOX = { x0: 0.79, x1: 0.96, y0: 0.13, y1: 0.78 };
+// Caja de la lámpara (fracción de imagen): capa de frente + escondite.
+const LAMP_BOX = { x0: 0.09, x1: 0.27, y0: 0.45, y1: 0.88 };
 
 const KURO_FW = 543; const KURO_FH = 724; const KURO_FRAMES = 4;
 const PEL_FW = 887; const PEL_FH = 887;
@@ -11,9 +16,11 @@ const TOTAL = 12; const START_COUNT = 8; const SNORE_MS = 7000;
 const IMG_W = 1536; const IMG_H = 1024;
 // Image fractions (0-1 over the background art) so Kuro + fuzz sit on the
 // couch on any screen: cover-fit crops differently per aspect ratio.
-const KURO_FX = 0.48; const KURO_FY = 0.466; // centro del sprite; cojín abajo queda en el asiento (~0.57)
+const KURO_FX = 0.48; const KURO_FY = 0.49; // centro del sprite; panza apoyada en el asiento
 const KURO_W_IMG = 0.156; // ancho de Kuro en fracción de imagen
 const ZONE_F = { x0: 0.30, x1: 0.70, y0: 0.50, y1: 0.60 };
+// Roam: toda la sala visible menos la librería (izquierda).
+const ROAM_F = { x0: 0.16, x1: 1.0, y0: 0.42, y1: 0.95 };
 
 // Map background-image fractions to screen pixels under resizeMode="cover".
 function imgToScreen(fx, fy, size) {
@@ -22,7 +29,20 @@ function imgToScreen(fx, fy, size) {
   const ox = (size.width - dw) / 2; const oy = (size.height - dh) / 2;
   return { x: ox + fx * dw, y: oy + fy * dh };
 }
-// Visible image-fraction range (for clamping spawns to on-screen area).
+// Map screen pixels back to background-image fractions.
+function screenToImg(x, y, size) {
+  const scale = Math.max(size.width / IMG_W, size.height / IMG_H);
+  const dw = IMG_W * scale; const dh = IMG_H * scale;
+  const ox = (size.width - dw) / 2; const oy = (size.height - dh) / 2;
+  return { fx: (x - ox) / dw, fy: (y - oy) / dh };
+}
+function inBoxPx(x, y, size, B) {
+  const { fx, fy } = screenToImg(x, y, size);
+  return fx >= B.x0 && fx <= B.x1 && fy >= B.y0 && fy <= B.y1;
+}
+function inBehindPx(x, y, size) {
+  return inBoxPx(x, y, size, PLANT_BOX) || inBoxPx(x, y, size, LAMP_BOX);
+}
 function visibleRange(size) {
   const scale = Math.max(size.width / IMG_W, size.height / IMG_H);
   const dw = IMG_W * scale; const dh = IMG_H * scale;
@@ -62,22 +82,23 @@ export default function SnoreLintGame({ onComplete }) {
 
   // Couch zone in screen fractions, derived from the background art so it
   // lands on the couch whether the screen is portrait or landscape.
-  const zoneOf = (sz) => {
-    const a = imgToScreen(ZONE_F.x0, ZONE_F.y0, sz);
-    const b = imgToScreen(ZONE_F.x1, ZONE_F.y1, sz);
+  const rectOf = (sz, F) => {
+    const a = imgToScreen(F.x0, F.y0, sz);
+    const b = imgToScreen(F.x1, F.y1, sz);
     const cl = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
     return {
       x0: cl(a.x / sz.width, 0.02, 0.98), y0: cl(a.y / sz.height, 0.05, 0.95),
       x1: cl(b.x / sz.width, 0.02, 0.98), y1: cl(b.y / sz.height, 0.05, 0.95),
     };
   };
-  const zone = zoneOf(stateRef.current.size.width ? stateRef.current.size : { width: ww, height: wh });
-  const kuroPos = imgToScreen(KURO_FX, KURO_FY, stateRef.current.size.width ? stateRef.current.size : { width: ww, height: wh });
+  const here = stateRef.current.size.width ? stateRef.current.size : { width: ww, height: wh };
+  const roam = rectOf(here, ROAM_F);
+  const kuroPos = imgToScreen(KURO_FX, KURO_FY, here);
 
   const start = useCallback(() => {
     nextId = 1;
     const list = [];
-    for (let i = 0; i < START_COUNT; i++) list.push(spawnPelusa(zone));
+    for (let i = 0; i < START_COUNT; i++) list.push(spawnPelusa(roam));
     stateRef.current = { ...stateRef.current, pelusas: list, sparks: [], zzz: [], caught: 0, spawned: START_COUNT, started: true, won: false };
     setPelusas(list); setSparks([]); setZzz([]); setCaught(0); setSpawned(START_COUNT); setWon(false); setStarted(true);
   }, []);
@@ -96,7 +117,7 @@ export default function SnoreLintGame({ onComplete }) {
       const s = stateRef.current;
       setZzz((z) => [...z.slice(-2), { id: Date.now(), born: Date.now() }]);
       if (s.spawned < TOTAL) {
-        const p = spawnPelusa(zone);
+        const p = spawnPelusa(rectOf(s.size, ROAM_F));
         s.pelusas = [...s.pelusas, p];
         s.spawned += 1;
         setPelusas(s.pelusas); setSpawned(s.spawned);
@@ -115,7 +136,7 @@ export default function SnoreLintGame({ onComplete }) {
       const dt = Math.min(0.1, (now - last) / 1000); last = now;
       const s = stateRef.current;
       const W = s.size.width; const H = s.size.height;
-      const zn = zoneOf(s.size);
+      const zn = rectOf(s.size, ROAM_F);
       const px = pointer.current;
       let changed = false; let caughtNow = 0;
       const next = [];
@@ -147,7 +168,7 @@ export default function SnoreLintGame({ onComplete }) {
             p.vx += (dx / d) * dt * 1.2;
             p.vy += (dy / d) * dt * 0.9 - dt * 0.4;
           }
-          if (d < 36) {
+          if (d < 36 && !inBehindPx(p.x * W, p.y * H, s.size)) {
             p.state = 'giggle'; p.stateT = 0.25; changed = true; next.push(p); continue;
           }
         }
@@ -198,6 +219,14 @@ export default function SnoreLintGame({ onComplete }) {
   const bgScale = Math.max(size.width / IMG_W, size.height / IMG_H);
   const bgW = IMG_W * bgScale; const bgH = IMG_H * bgScale;
   const bgX = (size.width - bgW) / 2; const bgY = (size.height - bgH) / 2;
+  const roamS = rectOf(size, ROAM_F);
+  // Plant foreground rect (bottom-aligned so the pot sits on the floor).
+  const plantA = imgToScreen(PLANT_BOX.x0, PLANT_BOX.y0, size);
+  const plantB = imgToScreen(PLANT_BOX.x1, PLANT_BOX.y1, size);
+  const plantW = Math.max(1, plantB.x - plantA.x);
+  const plantH = plantW * (1536 / 1024);
+  const plantL = plantA.x;
+  const plantT = plantB.y - plantH;
 
   return (
     <View
@@ -224,11 +253,27 @@ export default function SnoreLintGame({ onComplete }) {
         <Text key={z.id} style={[styles.zzz, { left: kuroPos.x + 50, top: kuroPos.y - 130 - i * 26 }]}>z</Text>
       ))}
       {/* pelusas */}
-      {pelusas.filter((p) => p.state !== 'poof').map((p) => (
-        <View key={p.id} style={[styles.pelFrame, { width: pel, height: pel, left: p.x * size.width - pel / 2, top: p.y * size.height - pel / 2 }]}>
-          <Image source={PELUSA_STRIP} resizeMode="stretch" style={[PIXELS, { width: pel * 2, height: pel, left: p.state === 'giggle' ? -pel : 0 }]} />
+      {pelusas.filter((p) => p.state !== 'poof' && !inBehindPx(p.x * size.width, p.y * size.height, size)).map((p) => {
+        const t = Math.min(1, Math.max(0, (p.y - roamS.y0) / Math.max(0.01, roamS.y1 - roamS.y0)));
+        const ps = pel * (0.7 + 0.5 * t);
+        const po = 0.75 + 0.15 * t;
+        return (
+        <View key={p.id} style={[styles.pelFrame, { width: ps, height: ps, left: p.x * size.width - ps / 2, top: p.y * size.height - ps / 2, opacity: po }]}>
+          <Image source={PELUSA_STRIP} resizeMode="stretch" style={[PIXELS, { width: ps * 2, height: ps, left: p.state === 'giggle' ? -ps : 0 }]} />
         </View>
-      ))}
+        );
+      })}
+      {/* plant foreground: pelusas behind it disappear */}
+      <Image source={PLANT_FRONT} resizeMode="stretch" style={[PIXELS, { position: 'absolute', left: plantL, top: plantT, width: plantW, height: plantH }]} />
+      {/* pelusas entre las hojas / tras el tubo: se asoman tenues, no atrapables ahí */}
+      {pelusas.filter((p) => p.state !== 'poof' && inBehindPx(p.x * size.width, p.y * size.height, size)).map((p) => {
+        const ps0 = pel * 0.8;
+        return (
+        <View key={'b' + p.id} style={[styles.pelFrame, { width: ps0, height: ps0, left: p.x * size.width - ps0 / 2, top: p.y * size.height - ps0 / 2, opacity: 0.45 }]}>
+          <Image source={PELUSA_STRIP} resizeMode="stretch" style={[PIXELS, { width: ps0 * 2, height: ps0, left: 0 }]} />
+        </View>
+        );
+      })}
       {/* sparks */}
       {sparks.map((sp) => (
         <Text key={sp.id} style={[styles.spark, { left: sp.x * size.width, top: sp.y * size.height, opacity: Math.max(0, sp.life) }]}>✦</Text>
@@ -241,8 +286,8 @@ export default function SnoreLintGame({ onComplete }) {
         <View style={styles.overlay}>
           <View style={styles.panel}>
             <Text style={styles.eyebrow}>Kuro ronca en el sillón</Text>
-            <Text style={styles.title}>Saca las pelusas sin despertarlo.</Text>
-            <Text style={styles.description}>Arrastra el dedo: deja brillitos y atrapa las 12 pelusas. Cada ronquido trae una más.</Text>
+            <Text style={styles.title}>Atrapa las pelusas sin despertarlo.</Text>
+            <Text style={styles.description}>Arrastra el dedo: deja brillitos y atrapa las 12 pelusas por toda la sala. Cada ronquido trae una más.</Text>
             <Pressable accessibilityRole="button" onPress={start} style={({ pressed }) => [styles.play, pressed && styles.pressed]}><Text style={styles.playText}>Jugar  →</Text></Pressable>
           </View>
         </View>

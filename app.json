@@ -1,7 +1,7 @@
 {
   "expo": {
-    "name": "Kuro: Saca Pelusas",
-    "slug": "kuro-saca-pelusas",
+    "name": "Kuro: Atrapa Pelusas",
+    "slug": "kuro-atrapa-pelusas",
     "version": "0.1.0",
     "orientation": "portrait",
     "userInterfaceStyle": "dark",
@@ -14,7 +14,7 @@
       "expo-font"
     ],
     "web": {
-      "name": "Kuro: Saca Pelusas",
+      "name": "Kuro: Atrapa Pelusas",
       "bundler": "metro"
     }
   }
