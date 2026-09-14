@@ -11,8 +11,9 @@ const TOTAL = 12; const START_COUNT = 8; const SNORE_MS = 7000;
 const IMG_W = 1536; const IMG_H = 1024;
 // Image fractions (0-1 over the background art) so Kuro + fuzz sit on the
 // couch on any screen: cover-fit crops differently per aspect ratio.
-const KURO_FX = 0.60; const KURO_FY = 0.575;
-const ZONE_F = { x0: 0.52, x1: 0.72, y0: 0.50, y1: 0.66 };
+const KURO_FX = 0.48; const KURO_FY = 0.466; // centro del sprite; cojín abajo queda en el asiento (~0.57)
+const KURO_W_IMG = 0.156; // ancho de Kuro en fracción de imagen
+const ZONE_F = { x0: 0.30, x1: 0.70, y0: 0.50, y1: 0.60 };
 
 // Map background-image fractions to screen pixels under resizeMode="cover".
 function imgToScreen(fx, fy, size) {
@@ -185,9 +186,18 @@ export default function SnoreLintGame({ onComplete }) {
     s.sparks = [...s.sparks.slice(-24), { id: Date.now() + Math.random(), x: locationX / s.size.width, y: locationY / s.size.height, vx: (Math.random() - 0.5) * 0.1, vy: -0.08, life: 0.5 }];
   }, []);
 
-  const kuroW = Math.min(190, size.width * 0.5);
+  const kuroWScreen = (() => {
+    const sz = stateRef.current.size.width ? stateRef.current.size : { width: ww, height: wh };
+    const scale = Math.max(sz.width / IMG_W, sz.height / IMG_H);
+    return Math.min(sz.width * 0.55, KURO_W_IMG * IMG_W * scale);
+  })();
+  const kuroW = kuroWScreen;
   const kuroH = kuroW * (KURO_FH / KURO_FW);
   const pel = Math.max(40, Math.min(60, size.width * 0.14));
+  // Exact cover rect so JS mapping matches painted pixels on every screen.
+  const bgScale = Math.max(size.width / IMG_W, size.height / IMG_H);
+  const bgW = IMG_W * bgScale; const bgH = IMG_H * bgScale;
+  const bgX = (size.width - bgW) / 2; const bgY = (size.height - bgH) / 2;
 
   return (
     <View
@@ -205,7 +215,7 @@ export default function SnoreLintGame({ onComplete }) {
       onResponderMove={onTouch}
       onResponderRelease={() => { pointer.current = null; }}
     >
-      <Image source={ROOM} resizeMode="cover" style={[StyleSheet.absoluteFill, PIXELS]} />
+      <Image source={ROOM} resizeMode="stretch" style={[{ position: 'absolute', left: bgX, top: bgY, width: bgW, height: bgH }, PIXELS]} />
       {/* Kuro snoring on couch */}
       <View style={[styles.kuroFrame, { width: kuroW, height: kuroH, left: kuroPos.x - kuroW / 2, top: kuroPos.y - kuroH / 2 }]}>
         <Image source={KURO_STRIP} resizeMode="stretch" style={[PIXELS, { width: kuroW * KURO_FRAMES, height: kuroH, left: -snoreFrame * kuroW }]} />
