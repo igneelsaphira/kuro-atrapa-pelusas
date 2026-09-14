@@ -8,6 +8,26 @@ const PELUSA_STRIP = require('../../assets/kuro/pelusa-sprite.png');
 const KURO_FW = 543; const KURO_FH = 724; const KURO_FRAMES = 4;
 const PEL_FW = 887; const PEL_FH = 887;
 const TOTAL = 12; const START_COUNT = 8; const SNORE_MS = 7000;
+const IMG_W = 1536; const IMG_H = 1024;
+// Image fractions (0-1 over the background art) so Kuro + fuzz sit on the
+// couch on any screen: cover-fit crops differently per aspect ratio.
+const KURO_FX = 0.60; const KURO_FY = 0.575;
+const ZONE_F = { x0: 0.52, x1: 0.72, y0: 0.50, y1: 0.66 };
+
+// Map background-image fractions to screen pixels under resizeMode="cover".
+function imgToScreen(fx, fy, size) {
+  const scale = Math.max(size.width / IMG_W, size.height / IMG_H);
+  const dw = IMG_W * scale; const dh = IMG_H * scale;
+  const ox = (size.width - dw) / 2; const oy = (size.height - dh) / 2;
+  return { x: ox + fx * dw, y: oy + fy * dh };
+}
+// Visible image-fraction range (for clamping spawns to on-screen area).
+function visibleRange(size) {
+  const scale = Math.max(size.width / IMG_W, size.height / IMG_H);
+  const dw = IMG_W * scale; const dh = IMG_H * scale;
+  const ox = (size.width - dw) / 2; const oy = (size.height - dh) / 2;
+  return { x0: -ox / dw, x1: (size.width - ox) / dw, y0: -oy / dh, y1: (size.height - oy) / dh };
+}
 const PIXELS = Platform.OS === 'web' ? { imageRendering: 'pixelated' } : {};
 
 let nextId = 1;
@@ -39,8 +59,19 @@ export default function SnoreLintGame({ onComplete }) {
   const stateRef = useRef({ pelusas: [], sparks: [], zzz: [], caught: 0, spawned: 0, started: false, won: false, size: { width: ww, height: wh } });
   const [, force] = useState(0);
 
-  const zone = { x0: 0.60, x1: 0.98, y0: 0.44, y1: 0.62 };
-  const kuroCX = 0.79; const kuroCY = 0.545;
+  // Couch zone in screen fractions, derived from the background art so it
+  // lands on the couch whether the screen is portrait or landscape.
+  const zoneOf = (sz) => {
+    const a = imgToScreen(ZONE_F.x0, ZONE_F.y0, sz);
+    const b = imgToScreen(ZONE_F.x1, ZONE_F.y1, sz);
+    const cl = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
+    return {
+      x0: cl(a.x / sz.width, 0.02, 0.98), y0: cl(a.y / sz.height, 0.05, 0.95),
+      x1: cl(b.x / sz.width, 0.02, 0.98), y1: cl(b.y / sz.height, 0.05, 0.95),
+    };
+  };
+  const zone = zoneOf(stateRef.current.size.width ? stateRef.current.size : { width: ww, height: wh });
+  const kuroPos = imgToScreen(KURO_FX, KURO_FY, stateRef.current.size.width ? stateRef.current.size : { width: ww, height: wh });
 
   const start = useCallback(() => {
     nextId = 1;
@@ -83,6 +114,7 @@ export default function SnoreLintGame({ onComplete }) {
       const dt = Math.min(0.1, (now - last) / 1000); last = now;
       const s = stateRef.current;
       const W = s.size.width; const H = s.size.height;
+      const zn = zoneOf(s.size);
       const px = pointer.current;
       let changed = false; let caughtNow = 0;
       const next = [];
@@ -120,10 +152,10 @@ export default function SnoreLintGame({ onComplete }) {
         }
         p.vy += dt * 1.6; // gravity
         p.x += p.vx * dt; p.y += p.vy * dt;
-        if (p.x < zone.x0) { p.x = zone.x0; p.vx = Math.abs(p.vx); }
-        if (p.x > zone.x1) { p.x = zone.x1; p.vx = -Math.abs(p.vx); }
-        if (p.y > zone.y1) { p.y = zone.y1; p.vy = -(0.2 + Math.random() * 0.25); }
-        if (p.y < zone.y0 - 0.12) { p.y = zone.y0 - 0.12; p.vy = 0; }
+        if (p.x < zn.x0) { p.x = zn.x0; p.vx = Math.abs(p.vx); }
+        if (p.x > zn.x1) { p.x = zn.x1; p.vx = -Math.abs(p.vx); }
+        if (p.y > zn.y1) { p.y = zn.y1; p.vy = -(0.2 + Math.random() * 0.25); }
+        if (p.y < zn.y0 - 0.12) { p.y = zn.y0 - 0.12; p.vy = 0; }
         changed = true; next.push(p);
       }
       // sparks decay
@@ -175,11 +207,11 @@ export default function SnoreLintGame({ onComplete }) {
     >
       <Image source={ROOM} resizeMode="cover" style={[StyleSheet.absoluteFill, PIXELS]} />
       {/* Kuro snoring on couch */}
-      <View style={[styles.kuroFrame, { width: kuroW, height: kuroH, left: kuroCX * size.width - kuroW / 2, top: kuroCY * size.height - kuroH / 2 }]}>
+      <View style={[styles.kuroFrame, { width: kuroW, height: kuroH, left: kuroPos.x - kuroW / 2, top: kuroPos.y - kuroH / 2 }]}>
         <Image source={KURO_STRIP} resizeMode="stretch" style={[PIXELS, { width: kuroW * KURO_FRAMES, height: kuroH, left: -snoreFrame * kuroW }]} />
       </View>
       {zzz.slice(-3).map((z, i) => (
-        <Text key={z.id} style={[styles.zzz, { left: kuroCX * size.width + 50, top: kuroCY * size.height - 130 - i * 26 }]}>z</Text>
+        <Text key={z.id} style={[styles.zzz, { left: kuroPos.x + 50, top: kuroPos.y - 130 - i * 26 }]}>z</Text>
       ))}
       {/* pelusas */}
       {pelusas.filter((p) => p.state !== 'poof').map((p) => (
