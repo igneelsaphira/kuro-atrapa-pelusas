@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { Platform, Pressable, StyleSheet, Text, View, Image, useWindowDimensions } from 'react-native';
+import { Animated, Platform, Pressable, StyleSheet, Text, View, Image, useWindowDimensions } from 'react-native';
 
 const ROOM = require('../../assets/kuro/sillon-sala.png');
 const KURO_STRIP = require('../../assets/kuro/kuro-snore-nocushion.png');
@@ -73,8 +73,8 @@ export default function SnoreLintGame({ onComplete }) {
   const [spawned, setSpawned] = useState(0);
   const [pelusas, setPelusas] = useState([]);
   const [sparks, setSparks] = useState([]);
-  const [snoreFrame, setSnoreFrame] = useState(0);
   const [zzz, setZzz] = useState([]);
+  const breathe = useRef(new Animated.Value(1)).current;
   const [won, setWon] = useState(false);
   const pointer = useRef(null);
   const stateRef = useRef({ pelusas: [], sparks: [], zzz: [], caught: 0, spawned: 0, started: false, won: false, size: { width: ww, height: wh } });
@@ -103,12 +103,18 @@ export default function SnoreLintGame({ onComplete }) {
     setPelusas(list); setSparks([]); setZzz([]); setCaught(0); setSpawned(START_COUNT); setWon(false); setStarted(true);
   }, []);
 
-  // breathing frames
+  // Respiración por código sobre un solo frame (los frames IA vienen desalineados).
   useEffect(() => {
     if (!started) return undefined;
-    const t = setInterval(() => setSnoreFrame((f) => (f + 1) % KURO_FRAMES), 900);
-    return () => clearInterval(t);
-  }, [started]);
+    const loop = Animated.loop(
+      Animated.sequence([
+        Animated.timing(breathe, { toValue: 1.035, duration: 1100, useNativeDriver: true }),
+        Animated.timing(breathe, { toValue: 1, duration: 1100, useNativeDriver: true }),
+      ])
+    );
+    loop.start();
+    return () => loop.stop();
+  }, [started, breathe]);
 
   // snore spawner
   useEffect(() => {
@@ -246,9 +252,9 @@ export default function SnoreLintGame({ onComplete }) {
     >
       <Image source={ROOM} resizeMode="stretch" style={[{ position: 'absolute', left: bgX, top: bgY, width: bgW, height: bgH }, PIXELS]} />
       {/* Kuro snoring on couch */}
-      <View style={[styles.kuroFrame, { width: kuroW, height: kuroH, left: kuroPos.x - kuroW / 2, top: kuroPos.y - kuroH / 2 }]}>
-        <Image source={KURO_STRIP} resizeMode="stretch" style={[PIXELS, { width: kuroW * KURO_FRAMES, height: kuroH, left: -snoreFrame * kuroW }]} />
-      </View>
+      <Animated.View style={[styles.kuroFrame, { width: kuroW, height: kuroH, left: kuroPos.x - kuroW / 2, top: kuroPos.y - kuroH / 2, transform: [{ scale: breathe }] }]}>
+        <Image source={KURO_STRIP} resizeMode="stretch" style={[PIXELS, { width: kuroW * KURO_FRAMES, height: kuroH, left: 0 }]} />
+      </Animated.View>
       {zzz.slice(-3).map((z, i) => (
         <Text key={z.id} style={[styles.zzz, { left: kuroPos.x + 50, top: kuroPos.y - 130 - i * 26 }]}>z</Text>
       ))}
